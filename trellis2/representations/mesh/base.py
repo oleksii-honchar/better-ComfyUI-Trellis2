@@ -39,6 +39,7 @@ class Mesh:
         return self.to('cpu')
     
     def fill_holes(self, max_hole_perimeter=3e-2):
+        torch.cuda.synchronize()  # Flush pending async frees before cumesh allocates
         vertices = self.vertices.cuda()
         faces = self.faces.cuda()
         
@@ -76,6 +77,7 @@ class Mesh:
         self.faces = new_faces.to(self.device)
         
     def remove_faces(self, face_mask: torch.Tensor):
+        torch.cuda.synchronize()  # Flush pending async frees before cumesh allocates
         vertices = self.vertices.cuda()
         faces = self.faces.cuda()
         
@@ -96,7 +98,8 @@ class Mesh:
         self.vertices = new_vertices.to(self.device)
         self.faces = new_faces.to(self.device)
         
-    def simplify_with_cumesh(self, target=1000000, verbose: bool=True, options: dict={}):        
+    def simplify_with_cumesh(self, target=1000000, verbose: bool=True, options: dict={}):
+        torch.cuda.synchronize()  # Flush pending async frees before cumesh allocates
         current_faces_num = len(self.faces)
         print(f'Current Faces Number: {current_faces_num}')
         
