@@ -533,8 +533,10 @@ class Trellis2LoadModel:
             # pipeline.naf_chunk_size = int(naf_chunk_size)
         
         if device == "cuda" and low_vram:
-            # low_vram: models load lazily via load_*() methods with .to(device)/.cpu() wrapping
-            pass
+            # low_vram: models load lazily via load_*() methods.
+            # Still call pipeline.to(device) to set _device attribute —
+            # the .to() method checks self.low_vram and won't move models.
+            pipeline.to(device)
         else:
             # Non-cuda devices, or cuda without low_vram: load models eagerly
             pipeline.to(device)
