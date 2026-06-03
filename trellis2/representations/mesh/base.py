@@ -44,6 +44,7 @@ class Mesh:
         
         mesh = cumesh.CuMesh()
         mesh.init(vertices, faces)
+        torch.cuda.synchronize()  # Ensure init data is committed to device
         mesh.get_edges()
         mesh.get_boundary_info()
         if mesh.num_boundaries == 0:
@@ -61,7 +62,9 @@ class Mesh:
             gc.collect()
             return
         mesh.fill_holes(max_hole_perimeter=max_hole_perimeter)
+        torch.cuda.synchronize()  # Ensure fill_holes result is ready before read
         new_vertices, new_faces = mesh.read()
+        torch.cuda.synchronize()  # Ensure read result is committed before del
         
         del mesh
         gc.collect()         
@@ -75,8 +78,11 @@ class Mesh:
         
         mesh = cumesh.CuMesh()
         mesh.init(vertices, faces)
+        torch.cuda.synchronize()  # Ensure init data is committed to device
         mesh.remove_faces(face_mask)
+        torch.cuda.synchronize()  # Ensure remove_faces result is ready before read
         new_vertices, new_faces = mesh.read()
+        torch.cuda.synchronize()  # Ensure read result is committed before del
         
         del mesh
         gc.collect()         
@@ -96,8 +102,11 @@ class Mesh:
         
         mesh = cumesh.CuMesh()
         mesh.init(vertices, faces)
+        torch.cuda.synchronize()  # Ensure init data is committed to device
         mesh.simplify(target, verbose=verbose, options=options)
+        torch.cuda.synchronize()  # Ensure simplify result is ready before read
         new_vertices, new_faces = mesh.read()
+        torch.cuda.synchronize()  # Ensure read result is committed before del
         
         del mesh
         gc.collect()         

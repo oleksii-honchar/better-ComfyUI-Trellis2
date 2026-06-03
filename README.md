@@ -14,6 +14,14 @@
 
 | Date | Description |
 | --- | --- |
+| **2026-06-03** | **CPU Offload Refactor (VRAM optimization)** — ~12 GB VRAM reduction on RTX 5090<br>
+- **P0.1:** Skip `pipeline.cuda()` when `low_vram=true` — enforces lazy loading, prevents eager model transfer to GPU<br>
+- **P0.2:** Replace `expandable_segments:True` with `max_split_size_mb:128,garbage_collection_threshold:0.6` — eliminates ~12 GB VRAM inflation from PyTorch CUDA allocator segment expansion<br>
+- **P0.3:** Remove `torch.cuda.empty_cache()` from `reset_cuda()` — prevents cumesh memory reclamation crashes ("Tensor without storage")<br>
+- **P0.4:** Add 9 `torch.cuda.synchronize()` calls around cumesh operations (init/compute/read in `fill_holes()`, `remove_faces()`, `simplify_with_cumesh()`) — prevents "Tensor without storage" errors<br>
+- **P2.1:** Add `unload_all()` method to `Trellis2ImageTo3DPipeline` — deterministic model unloading<br>
+- **P2.2:** Add `Trellis2UnloadModels` ComfyUI node — explicit memory cleanup before switching workflows<br>
+See [CHANGELOG.md](CHANGELOG.md) for full details |
 | **2026-06-02** | Added new node "Render MultiView (Nvdiffrast)"<br>Thanks GiusTex |
 | **2026-05-26** | Added new nodes used for the projection<br>Check the example Projection_Blender_Qwen_XViews |
 | **2026-05-22** | Added FOV Custom MoGe Camera node |

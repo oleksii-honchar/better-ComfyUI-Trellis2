@@ -141,8 +141,9 @@ def reset_cuda():
     # Force garbage collection of Python objects
     gc.collect()    
     
-    # Clear PyTorch CUDA cache
-    torch.cuda.empty_cache()
+    # Don't call empty_cache() if cumesh might be active — it would reclaim cumesh memory
+    # and cause "Tensor without storage" crashes. The pipeline's _cleanup_cuda() handles
+    # cleanup between phases when it's safe.
 
 def pil2tensor(image):
     return torch.from_numpy(np.array(image).astype(np.float32) / 255.0)[None,]
@@ -361,7 +362,7 @@ class Trellis2LoadModel:
         import requests
         
         os.environ['OPENCV_IO_ENABLE_OPENEXR'] = '1'
-        os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"  # Can save GPU memory
+        os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:128,garbage_collection_threshold:0.6"
         #os.environ["FLEX_GEMM_AUTOTUNE_CACHE_PATH"] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'autotune_cache.json')
         #os.environ["FLEX_GEMM_AUTOTUNER_VERBOSE"] = '1'        
         os.environ['ATTN_BACKEND'] = backend
@@ -508,12 +509,11 @@ class Trellis2LoadModel:
         # else:
             # pipeline.naf_chunk_size = int(naf_chunk_size)
         
-        if device=="cuda":
-            if low_vram:
-                pipeline.cuda()
-            else:
-                pipeline.to(device)
+        if device == "cuda" and low_vram:
+            # low_vram: models load lazily via load_*() methods with .to(device)/.cpu() wrapping
+            pass
         else:
+            # Non-cuda devices, or cuda without low_vram: load models eagerly
             pipeline.to(device)
         
         return (pipeline,)
@@ -5194,8 +5194,29 @@ class Trellis2CudaReset:
 
     def process(self, input_1):
         reset_cuda()
-        return (input_1,)          
-        
+        return (input_1,)
+
+class Trellis2UnloadModels:
+    """Directly unloads all Trellis2 pipeline models via pipeline.unload_all().
+    Distinct from Trellis2UnloadAllModels which uses ComfyUI's memory management system."""
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "pipeline": ("TRELLIS2PIPELINE",),
+            },
+        }
+
+    RETURN_TYPES = ("TRELLIS2PIPELINE",)
+    FUNCTION = "process"
+    CATEGORY = "Trellis2Wrapper"
+    OUTPUT_NODE = True
+
+    def process(self, pipeline):
+        pipeline.unload_all()
+        return (pipeline,)
+
 class Trellis2SaveImage:
     def __init__(self):
         self.output_dir = folder_paths.get_output_directory()
@@ -7333,6 +7354,7 @@ NODE_CLASS_MAPPINGS = {
     "Trellis2RenderMultiView": Trellis2RenderMultiView,
     "Trellis2SaveImage": Trellis2SaveImage,
     "Trellis2VoxelToMesh": Trellis2VoxelToMesh,
+    "Trellis2UnloadModels": Trellis2UnloadModels,
     "Trellis2UnloadAllModels": Trellis2UnloadAllModels,
     "Trellis2SparseGeneratorWithReconViaGen": Trellis2SparseGeneratorWithReconViaGen,
     "Trellis2ExtractImagesFromVideo": Trellis2ExtractImagesFromVideo,
@@ -7408,6 +7430,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "Trellis2RenderMultiView": "Trellis2 - Render MultiView (Blender)",
     "Trellis2SaveImage": "Trellis2 - Save Image",
     "Trellis2VoxelToMesh": "Trellis2 - Voxel to Mesh",
+    "Trellis2UnloadModels": "Trellis2 - Unload Models",
     "Trellis2UnloadAllModels": "Trellis2 - Unload All ComfyUI Models",
     "Trellis2SparseGeneratorWithReconViaGen": "Trellis2 - Sparse Generator with ReconViaGen",
     "Trellis2ExtractImagesFromVideo": "Trellis2 - Extract Images from Video",

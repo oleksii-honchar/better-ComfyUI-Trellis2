@@ -525,6 +525,29 @@ class Trellis2ImageTo3DPipeline(Pipeline):
             self.models['shape_slat_encoder'] = None
             self._cleanup_cuda()      
 
+    def unload_all(self) -> None:
+        """Unload ALL models — frees GPU and CPU memory."""
+        # Use existing unload_* methods if available
+        for name in list(self.models.keys()):
+            method = getattr(self, f"unload_{name}", None)
+            if callable(method):
+                method()
+        
+        # Also unload image_cond_model
+        if self.image_cond_model is not None:
+            del self.image_cond_model
+            self.image_cond_model = None
+        
+        # Fallback for models without dedicated unload_*:
+        for name, model in self.models.items():
+            if model is not None:
+                if hasattr(model, 'cpu'):
+                    model.cpu()
+                del self.models[name]
+                self.models[name] = None
+        
+        self._cleanup_cuda()
+
     def to(self, device: torch.device) -> None:
         self._device = device
         if not self.low_vram:
