@@ -940,7 +940,7 @@ class Trellis2ExportMesh:
         else:
             trimesh.export(output_glb_path, file_type=file_format)
             
-        relative_path = Path(subfolder) / f'{filename}_{counter:05}_.{file_format}'
+        relative_path = Path(subfolder) / f'{filename}.{file_format}'
         
         return (str(output_glb_path), str(relative_path), )        
         
