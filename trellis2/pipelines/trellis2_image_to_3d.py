@@ -546,7 +546,29 @@ class Trellis2ImageTo3DPipeline(Pipeline):
                 del self.models[name]
                 self.models[name] = None
         
+        # Unload direct-attribute models NOT in self.models dict
+        # (Pixal3D DINOv3 variants, MoGe, rembg, VGGT)
+        direct_attrs = [
+            'moge_model',
+            'pixal3d_image_cond_ss',
+            'pixal3d_image_cond_shape_512',
+            'pixal3d_image_cond_shape_1024',
+            'pixal3d_image_cond_tex_1024',
+            'rembg_model',
+            'VGGT_model',
+        ]
+        for attr in direct_attrs:
+            if hasattr(self, attr):
+                val = getattr(self, attr, None)
+                if val is not None:
+                    print(f"[Trellis2 AutoUnload] Freeing direct attr: {attr}")
+                    if hasattr(val, 'cpu'):
+                        val.cpu()
+                    setattr(self, attr, None)
+
+        print("[Trellis2 AutoUnload] Calling _cleanup_cuda...")
         self._cleanup_cuda()
+        print("[Trellis2 AutoUnload] unload_all() complete.")
 
     def to(self, device: torch.device) -> None:
         self._device = device

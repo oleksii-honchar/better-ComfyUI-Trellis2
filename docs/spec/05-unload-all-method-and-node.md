@@ -80,6 +80,8 @@ def unload_all(self) -> None:
 
 **Known limitation (M2):** The fallback loop does `del self.models[name]` then `self.models[name] = None` — `del` is unnecessary after setting to `None`. Style issue inherited from existing code.
 
+**Fix (2026-06-03):** Original `unload_all()` only freed `self.models` dict entries. Investigation during Trellis2→UltraShape OOM revealed 7+ direct-attribute models never freed (~6 GB orphaned GPU memory). Added unloading for `moge_model`, 4× `pixal3d_image_cond_*`, `rembg_model`, and `VGGT_model`. See [08-allocator-crossroads](./08-allocator-crossroads-blackwell.md).
+
 ### `nodes.py` — `Trellis2UnloadModels` node
 
 **New class (after `Trellis2CudaReset`, before `Trellis2SaveImage`):**

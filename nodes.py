@@ -1544,10 +1544,11 @@ class Trellis2MeshWithVoxelAdvancedGenerator:
         
         # Auto-unload pipeline after mesh generation
         try:
-            print("[AutoUnload] Unloading pipeline...")
+            print("[Trellis2 AutoUnload] Unloading pipeline...")
             pipeline.unload_all()
+            print("[Trellis2 AutoUnload] Pipeline unloaded successfully.")
         except Exception as e:
-            print(f"[AutoUnload] unload_all failed: {e}")
+            print(f"[Trellis2 AutoUnload] unload_all failed: {e}")
         
         return (mesh,bvh,)         
 

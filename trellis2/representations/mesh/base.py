@@ -53,11 +53,15 @@ class Mesh:
             gc.collect()
             return
         mesh.get_vertex_edge_adjacency()
+        torch.cuda.synchronize()
         mesh.get_vertex_boundary_adjacency()
+        torch.cuda.synchronize()
         mesh.get_manifold_boundary_adjacency()
-        torch.cuda.synchronize()  # protect against cudaMallocAsync reclamation
+        torch.cuda.synchronize()
         mesh.read_manifold_boundary_adjacency()
+        torch.cuda.synchronize()
         mesh.get_boundary_connected_components()
+        torch.cuda.synchronize()
         mesh.get_boundary_loops()
         if mesh.num_boundary_loops == 0:
             del mesh

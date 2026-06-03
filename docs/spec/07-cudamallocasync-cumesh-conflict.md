@@ -1,6 +1,6 @@
 # 07. cudaMallocAsync / cumesh Memory Conflict
 
-**Status:** ⚠️ Mitigated but not eliminated  
+**Status:** ⚠️ Mitigated but not eliminated — **allocator is `native`** (see [08-allocator-crossroads](./08-allocator-crossroads-blackwell.md))  
 **Severity:** Critical — causes `RuntimeError: Cannot access data pointer of Tensor that doesn't have storage`  
 **Platform:** Blackwell GPUs (RTX 50xx) with PyTorch ≥ 2.11  
 
