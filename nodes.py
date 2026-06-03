@@ -1542,6 +1542,13 @@ class Trellis2MeshWithVoxelAdvancedGenerator:
             print("Not building BVH : only used for texturing")
             bvh = None
         
+        # Auto-unload pipeline after mesh generation
+        try:
+            print("[AutoUnload] Unloading pipeline...")
+            pipeline.unload_all()
+        except Exception as e:
+            print(f"[AutoUnload] unload_all failed: {e}")
+        
         return (mesh,bvh,)         
 
 class Trellis2MeshWithVoxelMultiViewGenerator:
@@ -2265,6 +2272,12 @@ class Trellis2Remesh:
         
         mesh_copy.vertices = vertices.to(mesh_copy.device)
         mesh_copy.faces = faces.to(mesh_copy.device) 
+        
+        # Force free CUDA working buffers from reconstruction
+        import gc
+        gc.collect()
+        torch.cuda.synchronize()
+        torch.cuda.empty_cache()
                 
         return (mesh_copy,)
         

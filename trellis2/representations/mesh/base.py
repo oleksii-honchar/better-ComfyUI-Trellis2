@@ -55,6 +55,7 @@ class Mesh:
         mesh.get_vertex_edge_adjacency()
         mesh.get_vertex_boundary_adjacency()
         mesh.get_manifold_boundary_adjacency()
+        torch.cuda.synchronize()  # protect against cudaMallocAsync reclamation
         mesh.read_manifold_boundary_adjacency()
         mesh.get_boundary_connected_components()
         mesh.get_boundary_loops()
