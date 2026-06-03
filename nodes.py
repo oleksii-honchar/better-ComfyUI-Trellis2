@@ -926,14 +926,15 @@ class Trellis2ExportMesh:
     OUTPUT_NODE = True
 
     def process(self, trimesh, filename_prefix, file_format):        
-        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, folder_paths.get_output_directory())                      
-        output_glb_path = Path(full_output_folder, f'{filename}_{counter:05}_.{file_format}')
+        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, folder_paths.get_output_directory())
+        # Use clean filename without counter — filename_prefix already includes timestamp for uniqueness
+        output_glb_path = Path(full_output_folder, f'{filename}.{file_format}')
         output_glb_path.parent.mkdir(exist_ok=True)
 
         if file_format=='obj':
-            materialName = f"{filename}_{counter:05}_.mtl"
+            materialName = f"{filename}.mtl"
             if hasattr(trimesh, 'visual') and hasattr(trimesh.visual, 'material') and trimesh.visual.material is not None:
-                trimesh.visual.material.name = f"{filename}_{counter:05}"
+                trimesh.visual.material.name = filename
 
             trimesh.export(output_glb_path, file_type=file_format, mtl_name=materialName)
         else:
