@@ -45,6 +45,29 @@ from .trellis2.modules.sparse import config as sparseconfig
 from .trellis2.pipelines import samplers
 from .trellis2.modules.sparse import SparseTensor
 
+# ── VRAM logging helpers ──
+
+def _vram_snapshot():
+    """Return (allocated_bytes, reserved_bytes, peak_bytes) for current CUDA device, or zeros if not available."""
+    if torch.cuda.is_available():
+        return (torch.cuda.memory_allocated(),
+                torch.cuda.memory_reserved(),
+                torch.cuda.max_memory_allocated())
+    return (0, 0, 0)
+
+
+def _fmt_bytes(b):
+    """Format byte count as human-readable string."""
+    if b < 0:
+        return f"-{_fmt_bytes(-b)}"
+    if b >= 1024 ** 3:
+        return f"{b / (1024 ** 3):.2f} GB"
+    if b >= 1024 ** 2:
+        return f"{b / (1024 ** 2):.1f} MB"
+    if b >= 1024:
+        return f"{b / 1024:.0f} KB"
+    return f"{b} B"
+
 script_directory = os.path.dirname(os.path.abspath(__file__))
 comfy_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 
@@ -5219,6 +5242,10 @@ class Trellis2UnloadModels:
                    "Insert after Trellis2 nodes, forwards data unchanged.")
 
     def process(self, data):
+        # VRAM snapshot before
+        alloc_before, reserved_before, peak_before = _vram_snapshot()
+        print(f'[Trellis2UnloadModels] VRAM before: alloc={_fmt_bytes(alloc_before)}, reserved={_fmt_bytes(reserved_before)}, peak={_fmt_bytes(peak_before)}')
+
         # Step 1: Pipeline-level cleanup (if input supports it)
         if hasattr(data, 'unload_all'):
             try:
@@ -5257,6 +5284,12 @@ class Trellis2UnloadModels:
             torch.cuda.empty_cache()
             torch.cuda.ipc_collect()
 
+        # VRAM snapshot after
+        alloc_after, reserved_after, peak_after = _vram_snapshot()
+        freed_alloc = alloc_before - alloc_after
+        freed_reserved = reserved_before - reserved_after
+        print(f'[Trellis2UnloadModels] VRAM after:  alloc={_fmt_bytes(alloc_after)}, reserved={_fmt_bytes(reserved_after)}, peak={_fmt_bytes(peak_after)}')
+        print(f'[Trellis2UnloadModels] Freed:         alloc={_fmt_bytes(freed_alloc)}, reserved={_fmt_bytes(freed_reserved)}')
         print('[Trellis2UnloadModels] Done — forwarding data unchanged')
         return (data,)
 
@@ -5383,6 +5416,10 @@ class Trellis2UnloadAllModels:
                    "Insert after Trellis2 nodes, forwards data unchanged — works between any nodes.")
 
     def process(self, data):
+        # VRAM snapshot before
+        alloc_before, reserved_before, peak_before = _vram_snapshot()
+        print(f'[Trellis2UnloadAllModels] VRAM before: alloc={_fmt_bytes(alloc_before)}, reserved={_fmt_bytes(reserved_before)}, peak={_fmt_bytes(peak_before)}')
+
         print('[Trellis2UnloadAllModels] Unloading all ComfyUI-tracked models...')
         if hasattr(mm, 'current_loaded_models'):
             for i in range(len(mm.current_loaded_models) - 1, -1, -1):
@@ -5411,6 +5448,12 @@ class Trellis2UnloadAllModels:
             torch.cuda.empty_cache()
             torch.cuda.ipc_collect()
 
+        # VRAM snapshot after
+        alloc_after, reserved_after, peak_after = _vram_snapshot()
+        freed_alloc = alloc_before - alloc_after
+        freed_reserved = reserved_before - reserved_after
+        print(f'[Trellis2UnloadAllModels] VRAM after:  alloc={_fmt_bytes(alloc_after)}, reserved={_fmt_bytes(reserved_after)}, peak={_fmt_bytes(peak_after)}')
+        print(f'[Trellis2UnloadAllModels] Freed:         alloc={_fmt_bytes(freed_alloc)}, reserved={_fmt_bytes(freed_reserved)}')
         print('[Trellis2UnloadAllModels] Done — forwarding data unchanged')
         return (data,)
 
