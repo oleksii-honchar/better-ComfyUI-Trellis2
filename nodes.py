@@ -5198,7 +5198,7 @@ class Trellis2CudaReset:
 
 class Trellis2UnloadModels:
     """Directly unloads all Trellis2 pipeline models via pipeline.unload_all().
-    Distinct from Trellis2UnloadAllModels which uses ComfyUI's memory management system."""
+    Distinct from Trellis2UnloadAllModels which is a passthrough node using ComfyUI's memory management system."""
 
     @classmethod
     def INPUT_TYPES(s):
@@ -5319,61 +5319,57 @@ class Trellis2VoxelToMesh:
         return (mesh_copy,)
         
 class Trellis2UnloadAllModels:
+    """Passthrough node that aggressively unloads all ComfyUI-tracked models from VRAM.
+    Insert after the last Trellis2 node to free VRAM before heavy downstream nodes.
+    Forwards input data unchanged — works between any two nodes."""
+    
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "input_1": (any,)
+                "data": ("*",),
             },
         }
 
-    RETURN_TYPES = (any,)
-    RETURN_NAMES = ("output_1",)
+    RETURN_TYPES = ("*",)
+    RETURN_NAMES = ("data",)
     FUNCTION = "process"
     CATEGORY = "Trellis2Wrapper"
-    OUTPUT_NODE = True
+    OUTPUT_NODE = False
+    DESCRIPTION = ("Unloads all ComfyUI-tracked models from VRAM and clears CUDA cache. "
+                   "Insert after Trellis2 nodes, forwards data unchanged — works between any nodes.")
 
-    def process(self, input_1):
-        print('Unloading all models ...')
+    def process(self, data):
+        print('[Trellis2UnloadAllModels] Unloading all ComfyUI-tracked models...')
         if hasattr(mm, 'current_loaded_models'):
-            # Iterate backwards to safely remove items
             for i in range(len(mm.current_loaded_models) - 1, -1, -1):
                 loaded_model = mm.current_loaded_models[i]
-                
-                print(f"[AbsoluteUnload] Force-killing: {loaded_model.model.model.__class__.__name__}")
-                
-                # Force VRAM unload
+                print(f'[Trellis2UnloadAllModels] Force-killing: {loaded_model.model.model.__class__.__name__}')
                 loaded_model.model_unload(1e32)
-                
-                # Force System RAM unpinning (This is what the standard loop skipped)
                 if hasattr(loaded_model.model, 'partially_unload_ram'):
                     loaded_model.model.partially_unload_ram(1e32)
-                    
-            # Clear ComfyUI's intermediate cross-attention and tensor caches
-            if hasattr(mm, 'current_loaded_models'):
-                mm.current_loaded_models.clear()            
+            mm.current_loaded_models.clear()
 
             import comfy.controlnet
             if hasattr(comfy.controlnet, 'controlnet_loaded_models'):
-                comfy.controlnet.controlnet_loaded_models.clear() 
-                
-        mm.free_memory(memory_required = 1e30, 
-                       device = mm.get_torch_device(),
-                       ram_required = 1e30)
-                       
-        print('Clearing cache ...')
+                comfy.controlnet.controlnet_loaded_models.clear()
+
+        mm.free_memory(memory_required=1e30,
+                       device=mm.get_torch_device(),
+                       ram_required=1e30)
+
+        print('[Trellis2UnloadAllModels] Clearing CUDA cache...')
         mm.soft_empty_cache()
 
         gc.collect()
         gc.collect()
-        
+
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             torch.cuda.ipc_collect()
 
-        print('Memory cleared')
-        
-        return (input_1,)    
+        print('[Trellis2UnloadAllModels] Done — forwarding data unchanged')
+        return (data,)
 
 class Trellis2SparseGeneratorWithReconViaGen:
     @classmethod
