@@ -385,7 +385,7 @@ class Trellis2LoadModel:
         import requests
         
         os.environ['OPENCV_IO_ENABLE_OPENEXR'] = '1'
-        os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "backend:native,expandable_segments:False,max_split_size_mb:128,garbage_collection_threshold:0.6"
+        os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:False,max_split_size_mb:128,garbage_collection_threshold:0.6"
         #os.environ["FLEX_GEMM_AUTOTUNE_CACHE_PATH"] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'autotune_cache.json')
         #os.environ["FLEX_GEMM_AUTOTUNER_VERBOSE"] = '1'        
         os.environ['ATTN_BACKEND'] = backend
