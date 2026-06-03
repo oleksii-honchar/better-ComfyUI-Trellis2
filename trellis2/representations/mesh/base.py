@@ -65,6 +65,9 @@ class Mesh:
         torch.cuda.synchronize()  # Ensure fill_holes result is ready before read
         new_vertices, new_faces = mesh.read()
         torch.cuda.synchronize()  # Ensure read result is committed before del
+        # Clone to detach from cumesh-managed storage before mesh destruction
+        new_vertices = new_vertices.clone()
+        new_faces = new_faces.clone()
         
         del mesh
         gc.collect()         
@@ -83,6 +86,9 @@ class Mesh:
         torch.cuda.synchronize()  # Ensure remove_faces result is ready before read
         new_vertices, new_faces = mesh.read()
         torch.cuda.synchronize()  # Ensure read result is committed before del
+        # Clone to detach from cumesh-managed storage before mesh destruction
+        new_vertices = new_vertices.clone()
+        new_faces = new_faces.clone()
         
         del mesh
         gc.collect()         
@@ -107,6 +113,9 @@ class Mesh:
         torch.cuda.synchronize()  # Ensure simplify result is ready before read
         new_vertices, new_faces = mesh.read()
         torch.cuda.synchronize()  # Ensure read result is committed before del
+        # Clone to detach from cumesh-managed storage before mesh destruction
+        new_vertices = new_vertices.clone()
+        new_faces = new_faces.clone()
         
         del mesh
         gc.collect()         
