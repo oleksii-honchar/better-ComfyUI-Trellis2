@@ -2960,18 +2960,19 @@ class Trellis2ImageTo3DPipeline(Pipeline):
             SparseTensor: The encoded structured latent.
         """
         print('Converting mesh to flexible dual grid ...')        
-        vertices = torch.from_numpy(mesh.vertices).float()
-        faces = torch.from_numpy(mesh.faces).long()
+        vertices = torch.from_numpy(mesh.vertices).float().clone()
+        faces = torch.from_numpy(mesh.faces).long().clone()
         
-        voxel_indices, dual_vertices, intersected = o_voxel.convert.mesh_to_flexible_dual_grid(
-            vertices.cpu(), faces.cpu(),
-            grid_size=resolution,
-            aabb=[[-0.5,-0.5,-0.5],[0.5,0.5,0.5]],
-            face_weight=1.0,
-            boundary_weight=0.2,
-            regularization_weight=1e-2,
-            timing=True,
-        )
+        with torch.no_grad():
+            voxel_indices, dual_vertices, intersected = o_voxel.convert.mesh_to_flexible_dual_grid(
+                vertices, faces,
+                grid_size=resolution,
+                aabb=[[-0.5,-0.5,-0.5],[0.5,0.5,0.5]],
+                face_weight=1.0,
+                boundary_weight=0.2,
+                regularization_weight=1e-2,
+                timing=True,
+            )
             
         vertices = SparseTensor(
             feats=dual_vertices * resolution - voxel_indices,
@@ -3417,18 +3418,19 @@ class Trellis2ImageTo3DPipeline(Pipeline):
         return out_mesh, baseColorTexture, metallicRoughnessTexture        
     
     def get_coords_from_trimesh(self, mesh, resolution):
-        vertices = torch.from_numpy(mesh.vertices).float()
-        faces = torch.from_numpy(mesh.faces).long()
+        vertices = torch.from_numpy(mesh.vertices).float().clone()
+        faces = torch.from_numpy(mesh.faces).long().clone()
         
-        voxel_indices, dual_vertices, intersected = o_voxel.convert.mesh_to_flexible_dual_grid(
-            vertices.cpu(), faces.cpu(),
-            grid_size=resolution,
-            aabb=[[-0.5,-0.5,-0.5],[0.5,0.5,0.5]],
-            face_weight=1.0,
-            boundary_weight=0.2,
-            regularization_weight=1e-2,
-            timing=True,
-        )
+        with torch.no_grad():
+            voxel_indices, dual_vertices, intersected = o_voxel.convert.mesh_to_flexible_dual_grid(
+                vertices, faces,
+                grid_size=resolution,
+                aabb=[[-0.5,-0.5,-0.5],[0.5,0.5,0.5]],
+                face_weight=1.0,
+                boundary_weight=0.2,
+                regularization_weight=1e-2,
+                timing=True,
+            )
         
         coords = torch.cat([torch.zeros_like(voxel_indices[:, 0:1]), voxel_indices], dim=-1)                
         coords = coords.cpu()

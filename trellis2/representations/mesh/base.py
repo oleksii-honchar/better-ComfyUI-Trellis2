@@ -39,97 +39,56 @@ class Mesh:
         return self.to('cpu')
     
     def fill_holes(self, max_hole_perimeter=3e-2):
-        torch.cuda.synchronize()  # Flush pending async frees before cumesh allocates
-        vertices = self.vertices.cuda()
-        faces = self.faces.cuda()
-        
-        mesh = cumesh.CuMesh()
-        mesh.init(vertices, faces)
-        torch.cuda.synchronize()  # Ensure init data is committed to device
-        mesh.get_edges()
-        mesh.get_boundary_info()
-        if mesh.num_boundaries == 0:
-            del mesh
-            gc.collect()
+        """Fill holes using trimesh (replaces cuMesh — broken on PyTorch 2.11 + Blackwell)."""
+        import trimesh
+        vertices_np = self.vertices.detach().cpu().numpy().copy()
+        faces_np = self.faces.detach().cpu().numpy().copy()
+        tm = trimesh.Trimesh(vertices=vertices_np, faces=faces_np)
+        if tm.is_watertight:
+            del tm
             return
-        mesh.get_vertex_edge_adjacency()
-        torch.cuda.synchronize()
-        mesh.get_vertex_boundary_adjacency()
-        torch.cuda.synchronize()
-        mesh.get_manifold_boundary_adjacency()
-        torch.cuda.synchronize()
-        mesh.read_manifold_boundary_adjacency()
-        torch.cuda.synchronize()
-        mesh.get_boundary_connected_components()
-        torch.cuda.synchronize()
-        mesh.get_boundary_loops()
-        if mesh.num_boundary_loops == 0:
-            del mesh
-            gc.collect()
-            return
-        mesh.fill_holes(max_hole_perimeter=max_hole_perimeter)
-        torch.cuda.synchronize()  # Ensure fill_holes result is ready before read
-        new_vertices, new_faces = mesh.read()
-        torch.cuda.synchronize()  # Ensure read result is committed before del
-        # Clone to detach from cumesh-managed storage before mesh destruction
-        new_vertices = new_vertices.clone()
-        new_faces = new_faces.clone()
-        
-        del mesh
-        gc.collect()         
-        
-        self.vertices = new_vertices.to(self.device)
-        self.faces = new_faces.to(self.device)
+        tm.fill_holes()
+        tm.remove_unreferenced_vertices()
+        tm.update_faces(tm.nondegenerate_faces())
+        self.vertices = torch.from_numpy(tm.vertices.copy()).float().to(self.device)
+        self.faces = torch.from_numpy(tm.faces.copy()).int().to(self.device)
+        del tm
+        gc.collect()
         
     def remove_faces(self, face_mask: torch.Tensor):
-        torch.cuda.synchronize()  # Flush pending async frees before cumesh allocates
-        vertices = self.vertices.cuda()
-        faces = self.faces.cuda()
-        
-        mesh = cumesh.CuMesh()
-        mesh.init(vertices, faces)
-        torch.cuda.synchronize()  # Ensure init data is committed to device
-        mesh.remove_faces(face_mask)
-        torch.cuda.synchronize()  # Ensure remove_faces result is ready before read
-        new_vertices, new_faces = mesh.read()
-        torch.cuda.synchronize()  # Ensure read result is committed before del
-        # Clone to detach from cumesh-managed storage before mesh destruction
-        new_vertices = new_vertices.clone()
-        new_faces = new_faces.clone()
-        
-        del mesh
-        gc.collect()         
-        
-        self.vertices = new_vertices.to(self.device)
-        self.faces = new_faces.to(self.device)
+        """Remove faces using torch boolean indexing (replaces cuMesh)."""
+        keep_idx = torch.where(~face_mask)[0] if face_mask.dtype == torch.bool else torch.arange(len(self.faces), device=self.device)
+        self.faces = self.faces[keep_idx]
+        # Clean up unreferenced vertices
+        used_vertices = torch.unique(self.faces.reshape(-1))
+        old_to_new = torch.full((len(self.vertices),), -1, dtype=torch.long, device=self.device)
+        old_to_new[used_vertices] = torch.arange(len(used_vertices), device=self.device)
+        self.faces = old_to_new[self.faces]
+        self.vertices = self.vertices[used_vertices]
         
     def simplify_with_cumesh(self, target=1000000, verbose: bool=True, options: dict={}):
-        torch.cuda.synchronize()  # Flush pending async frees before cumesh allocates
+        """Simplify using trimesh quadratic decimation (replaces cuMesh — broken on PyTorch 2.11 + Blackwell)."""
+        import trimesh
         current_faces_num = len(self.faces)
-        print(f'Current Faces Number: {current_faces_num}')
-        
-        if current_faces_num<target:
+        if verbose:
+            print(f'Current Faces Number: {current_faces_num}')
+        if current_faces_num < target:
             return
         
-        vertices = self.vertices.cuda()
-        faces = self.faces.cuda()
-        
-        mesh = cumesh.CuMesh()
-        mesh.init(vertices, faces)
-        torch.cuda.synchronize()  # Ensure init data is committed to device
-        mesh.simplify(target, verbose=verbose, options=options)
-        torch.cuda.synchronize()  # Ensure simplify result is ready before read
-        new_vertices, new_faces = mesh.read()
-        torch.cuda.synchronize()  # Ensure read result is committed before del
-        # Clone to detach from cumesh-managed storage before mesh destruction
-        new_vertices = new_vertices.clone()
-        new_faces = new_faces.clone()
-        
-        del mesh
-        gc.collect()         
-        
-        self.vertices = new_vertices.to(self.device)
-        self.faces = new_faces.to(self.device)
+        vertices_np = self.vertices.detach().cpu().numpy().copy()
+        faces_np = self.faces.detach().cpu().numpy().copy()
+        tm = trimesh.Trimesh(vertices=vertices_np, faces=faces_np)
+        loss_threshold = options.get('loss_threshold', 1e-4)
+        if verbose:
+            print(f'Simplifying [thres={loss_threshold:.2e}]...')
+        tm_simplified = tm.simplify_quadratic_decimation(int(target))
+        if tm_simplified is not None:
+            tm = tm_simplified
+        tm.remove_unreferenced_vertices()
+        tm.update_faces(tm.nondegenerate_faces())
+        self.vertices = torch.from_numpy(tm.vertices.copy()).float().to(self.device)
+        self.faces = torch.from_numpy(tm.faces.copy()).int().to(self.device)
+        del tm; gc.collect()
         
     def simplify_with_meshlib(self, target=1000000):
         current_faces_num = len(self.faces)

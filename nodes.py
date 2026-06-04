@@ -25,7 +25,28 @@ import copy
 
 import pymeshlab
 
-import cumesh as CuMesh
+import cumesh as _real_cumesh
+
+class _SafeBVH:
+    """Fallback BVH when cuMesh is broken (PyTorch 2.11 + Blackwell)."""
+    def __init__(self, vertices, faces):
+        self.vertices = vertices
+        self.faces = faces
+    def unsigned_distance(self, positions, return_uvw=False):
+        # Not used in Generator/MeshRefiner pipeline — only in texturing nodes
+        raise NotImplementedError("cuMesh BVH unavailable — use CPU trimesh BVH if needed")
+
+def _safe_cuBVH(vertices, faces):
+    try:
+        return _real_cumesh.cuBVH(vertices, faces)
+    except RuntimeError:
+        print("[SafeCuMesh] cuBVH failed (PyTorch 2.11 compat) — using fallback BVH")
+        return _SafeBVH(vertices, faces)
+
+# Patch the cuBVH factory onto the module alias
+_real_cumesh._cuBVH_original = _real_cumesh.cuBVH
+_real_cumesh.cuBVH = _safe_cuBVH
+CuMesh = _real_cumesh
 import o_voxel
 
 import meshlib.mrmeshnumpy as mrmeshnumpy
@@ -1553,6 +1574,31 @@ class Trellis2MeshWithVoxelAdvancedGenerator:
         except Exception as e:
             print(f"[Trellis2 AutoUnload] unload_all failed: {e}")
         
+        # Offload mesh output to CPU to free GPU VRAM for downstream nodes
+        if hasattr(mesh, 'vertices') and mesh.vertices is not None:
+            mesh.vertices = mesh.vertices.cpu()
+        if hasattr(mesh, 'faces') and mesh.faces is not None:
+            mesh.faces = mesh.faces.cpu()
+        vertices = vertices.cpu()
+        faces = faces.cpu()
+        if bvh is not None:
+            if hasattr(bvh, 'vertices'):
+                bvh.vertices = bvh.vertices.cpu()
+            if hasattr(bvh, 'faces'):
+                bvh.faces = bvh.faces.cpu()
+        print("[Trellis2 AutoUnload] Mesh output offloaded to CPU.")
+        
+        # Aggressive: force ALL ComfyUI-tracked models to CPU + GC
+        # Needed because PYTORCH_NO_CUDA_MEMORY_CACHING=1 makes empty_cache() a no-op,
+        # and UltraShape models managed by accelerate aren't in ComfyUI's model list.
+        # gc.collect() + synchronize() forces deferred tensor frees through cudaFree.
+        import gc
+        import comfy.model_management as model_mgmt
+        model_mgmt.unload_all_models()
+        gc.collect()
+        torch.cuda.synchronize()
+        print("[Trellis2 AutoUnload] Full VRAM cleanup complete.")
+        
         return (mesh,bvh,)         
 
 class Trellis2MeshWithVoxelMultiViewGenerator:
@@ -2361,6 +2407,13 @@ class Trellis2ReconstructMeshWithQuad:
         
         mesh_copy.vertices = vertices.to(mesh_copy.device)
         mesh_copy.faces = faces.to(mesh_copy.device) 
+        
+        # Force-free cuMesh internal CUDA buffers (quad topology allocates massive working memory)
+        import gc
+        del vertices, faces
+        gc.collect()
+        gc.collect()
+        torch.cuda.synchronize()
                 
         return (mesh_copy,)       
         
@@ -5467,6 +5520,25 @@ class Trellis2UnloadAllModels:
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             torch.cuda.ipc_collect()
+
+        # Nuclear: force all CUDA nn.Modules to CPU — accelerate-managed models
+        # (UltraShape DiT/VAE/Conditioner) bypass ComfyUI's model tracking
+        import torch.nn as nn
+        _cpu_count = 0
+        for obj in gc.get_objects():
+            try:
+                if isinstance(obj, nn.Module):
+                    for p in obj.parameters():
+                        if p.data.is_cuda:
+                            p.data = p.data.cpu()
+                            _cpu_count += 1
+            except Exception:
+                pass
+        if _cpu_count > 0:
+            print(f'[Trellis2UnloadAllModels] Forced {_cpu_count} accelerate-tracked parameters to CPU.')
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
 
         # VRAM snapshot after
         alloc_after, reserved_after, peak_after = _vram_snapshot()
