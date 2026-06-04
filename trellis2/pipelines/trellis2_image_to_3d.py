@@ -2960,8 +2960,13 @@ class Trellis2ImageTo3DPipeline(Pipeline):
             SparseTensor: The encoded structured latent.
         """
         print('Converting mesh to flexible dual grid ...')        
+        # PyTorch 2.11: set allow_tensor_metadata_change=True so that
+        # o_voxel C++ extension can call set_stride() on internal tensors.
+        # This flag propagates through all PyTorch ops (clone, as_strided, etc).
         vertices = torch.from_numpy(mesh.vertices).float().clone()
         faces = torch.from_numpy(mesh.faces).long().clone()
+        torch._C._set_tensor_metadata(vertices, {"allow_tensor_metadata_change": True})
+        torch._C._set_tensor_metadata(faces, {"allow_tensor_metadata_change": True})
         
         with torch.no_grad():
             voxel_indices, dual_vertices, intersected = o_voxel.convert.mesh_to_flexible_dual_grid(
@@ -3418,8 +3423,13 @@ class Trellis2ImageTo3DPipeline(Pipeline):
         return out_mesh, baseColorTexture, metallicRoughnessTexture        
     
     def get_coords_from_trimesh(self, mesh, resolution):
+        # PyTorch 2.11: set allow_tensor_metadata_change=True so that
+        # o_voxel C++ extension can call set_stride() on internal tensors.
+        # This flag propagates through all PyTorch ops (clone, as_strided, etc).
         vertices = torch.from_numpy(mesh.vertices).float().clone()
         faces = torch.from_numpy(mesh.faces).long().clone()
+        torch._C._set_tensor_metadata(vertices, {"allow_tensor_metadata_change": True})
+        torch._C._set_tensor_metadata(faces, {"allow_tensor_metadata_change": True})
         
         with torch.no_grad():
             voxel_indices, dual_vertices, intersected = o_voxel.convert.mesh_to_flexible_dual_grid(

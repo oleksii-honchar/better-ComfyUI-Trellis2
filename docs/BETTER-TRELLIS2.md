@@ -22,6 +22,10 @@ The fork adds several fixes to address VRAM OOM, cumesh crashes, and memory mana
 - **Add `torch.cuda.synchronize()` around cumesh ops** — 9 synchronization points across 3 cumesh methods (init/compute/read) prevent "Tensor without storage" errors from `empty_cache()` reclaiming cumesh-owned memory. [See detailed spec](./spec/04-synchronize-cumesh-operations.md)
 - **`unload_all()` method** — Deterministic model unloading from GPU and CPU memory, called via the new `Trellis2UnloadModels` node. [See detailed spec](./spec/05-unload-all-method-and-node.md)
 - **Cascade sequential model loading (P1)** — Cascade pipeline paths load shape flow models on-demand instead of pre-loading both, preventing ~4-6 GB double-load spikes. [See detailed spec](./spec/06-cascade-sequential-loading.md)
+- **cudaMallocAsync vs cumesh conflict (P0)** — Blackwell GPUs force-enable `cudaMallocAsync`, causing use-after-free races with cuMesh. Resolved via `PYTORCH_NO_CUDA_MEMORY_CACHING=1`. [See detailed spec](./spec/07-cudamallocasync-cumesh-conflict.md)
+- **Allocator crossroads on Blackwell (P0)** — Investigation of `backend:native` vs `NO_CUDA_MEMORY_CACHING` approaches. [See detailed spec](./spec/08-allocator-crossroads-blackwell.md)
+- **Trellis2 `unload_all()` VRAM leak fix (P0)** — Extended model unloading to catch accelerate-managed models bypassing ComfyUI tracking. [See detailed spec](./spec/09-trellis2-unload-all-investigation.md)
+- **PyTorch 2.11 + Blackwell full compatibility (P0)** — 5-layer fix: cudaMallocAsync, cuMesh replacements, o_voxel stride patch, SafeBVH fallback, cuMesh-free workflow. [See detailed spec](./spec/10-pytorch-211-blackwell-compatibility.md)
 
 See **[FEATURES.md](./FEATURES.md)** for detailed descriptions and configuration.
 
